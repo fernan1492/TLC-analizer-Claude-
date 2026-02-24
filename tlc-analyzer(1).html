@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TLC Analyzer v2</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f11; --surface: #16181c; --surface2: #1e2128;
+    --border: #2a2d35; --accent: #7ee8a2; --accent2: #5bc4e0;
+    --warn: #f0a500; --text: #e8eaed; --muted: #6b7280;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+  .logo { font-family: 'IBM Plex Mono', monospace; font-size: 1.1rem; font-weight: 600; color: var(--accent); }
+  .logo span { color: var(--muted); }
+  .subtitle { font-size: 0.72rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+  .main { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+  .left-panel { width: 300px; min-width: 240px; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  .right-panel { width: 360px; min-width: 280px; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  .center-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .panel-section { padding: 1rem; border-bottom: 1px solid var(--border); }
+  .panel-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 0.6rem; }
+
+  .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 1.5rem 1rem; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--muted); font-size: 0.8rem; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); color: var(--accent); background: rgba(126,232,162,0.04); }
+  .upload-zone input { display: none; }
+
+  .btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-family: 'IBM Plex Mono', monospace; font-size: 0.73rem; transition: all 0.15s; display: inline-flex; align-items: center; gap: 0.35rem; }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #0e0f11; border-color: var(--accent); font-weight: 600; }
+  .btn.primary:hover { background: #9df5b8; }
+  .row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+  .mode-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .mode-btn { padding: 0.35rem 0.65rem; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; cursor: pointer; transition: all 0.15s; }
+  .mode-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(126,232,162,0.08); }
+  .hint { font-size: 0.7rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; line-height: 1.5; margin-top: 0.5rem; }
+
+  .lanes-list { display: flex; flex-direction: column; gap: 0.35rem; }
+  .lane-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.45rem 0.55rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; transition: border-color 0.15s; }
+  .lane-item.selected { border-color: var(--accent2); }
+  .lane-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .lane-name-input { background: transparent; border: none; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; flex: 1; outline: none; min-width: 0; }
+  .lane-name-input::placeholder { color: var(--muted); }
+  .lane-action-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; border-radius: 3px; }
+  .lane-action-btn:hover { color: #e05b5b; }
+
+  .canvas-container { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; background: repeating-conic-gradient(#13151a 0% 25%, #111316 0% 50%) 0 0 / 20px 20px; }
+  #tlcCanvas { max-width: 100%; max-height: 100%; cursor: crosshair; display: block; }
+  .toolbar { padding: 0.6rem 1rem; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; background: var(--surface); }
+  .tlabel { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; color: var(--muted); }
+  .tval { color: var(--accent); }
+
+  .step-bar { display: flex; gap: 0.3rem; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); background: var(--surface); align-items: center; flex-wrap: wrap; }
+  .step { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--muted); display: flex; align-items: center; gap: 0.25rem; }
+  .step.active { color: var(--accent); }
+  .step-num { width: 16px; height: 16px; border-radius: 50%; border: 1px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 0.58rem; }
+  .step-arrow { color: var(--border); font-size: 0.8rem; }
+
+  .range-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+  .range-row label { font-size: 0.68rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; min-width: 65px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .range-val { font-size: 0.68rem; color: var(--accent); font-family: 'IBM Plex Mono', monospace; min-width: 30px; }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .tab { flex: 1; padding: 0.6rem 0.3rem; text-align: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; flex: 1; overflow-y: auto; }
+  .tab-content.active { display: block; }
+
+  .quantity-section { padding: 0.75rem; }
+  .quant-chart { margin-bottom: 1.2rem; }
+  .quant-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem; color: var(--muted); margin-bottom: 0.5rem; letter-spacing: 1px; text-transform: uppercase; }
+  .bar-group { margin-bottom: 0.6rem; }
+  .bar-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text); margin-bottom: 0.2rem; display: flex; justify-content: space-between; align-items: center; }
+  .bar-track { height: 18px; background: var(--surface2); border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s cubic-bezier(.4,0,.2,1); display: flex; align-items: center; padding-left: 7px; min-width: 2px; }
+  .bar-fill-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: rgba(0,0,0,0.75); font-weight: 600; white-space: nowrap; }
+
+  .densito-section { padding: 0.75rem; }
+  canvas.densito { width: 100%; border-radius: 4px; background: var(--surface2); display: block; margin-bottom: 1rem; }
+
+  .rf-section { padding: 0.75rem; }
+  .rf-table { width: 100%; border-collapse: collapse; font-size: 0.7rem; font-family: 'IBM Plex Mono', monospace; }
+  .rf-table th { color: var(--muted); text-align: left; padding: 0.3rem 0.4rem; border-bottom: 1px solid var(--border); font-size: 0.6rem; letter-spacing: 1px; }
+  .rf-table td { padding: 0.28rem 0.4rem; border-bottom: 1px solid rgba(42,45,53,0.5); }
+  .rf-badge { display: inline-block; background: rgba(126,232,162,0.1); color: var(--accent); border-radius: 3px; padding: 1px 5px; }
+  .quant-badge { display: inline-block; background: rgba(91,196,224,0.1); color: var(--accent2); border-radius: 3px; padding: 1px 5px; }
+
+  .notice { background: rgba(91,196,224,0.07); border: 1px solid rgba(91,196,224,0.18); border-radius: 6px; padding: 0.5rem 0.65rem; font-size: 0.68rem; color: var(--accent2); font-family: 'IBM Plex Mono', monospace; line-height: 1.6; margin-bottom: 0.75rem; }
+
+  .empty-state { padding: 1.5rem 1rem; text-align: center; color: var(--muted); font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace; line-height: 1.6; }
+
+  .metrics-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  .metric { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; flex: 1; min-width: 70px; }
+  .metric-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-bottom: 2px; }
+  .metric-val { font-family: 'IBM Plex Mono', monospace; font-size: 1rem; font-weight: 600; color: var(--accent); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">TLC<span>.</span>analyzer <span style="font-size:0.7rem;color:var(--accent2)">v2</span></div>
+    <div class="subtitle">thin layer chromatography · densitometría cuantitativa & comparación de manchas</div>
+  </div>
+</header>
+
+<div class="step-bar">
+  <div class="step active" id="step1"><div class="step-num">1</div>Imagen</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step2"><div class="step-num">2</div>Frente</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step3"><div class="step-num">3</div>Origen</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step4"><div class="step-num">4</div>Calles</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step5"><div class="step-num">5</div>Manchas</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="step6"><div class="step-num">6</div>Comparar</div>
+</div>
+
+<div class="main">
+  <!-- LEFT -->
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-title">Imagen TLC</div>
+      <div class="upload-zone" id="uploadZone">
+        <div style="font-size:1.8rem;margin-bottom:0.4rem">⬆</div>
+        <div>Arrastra tu imagen aquí<br>o haz clic para seleccionar</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">Modo de edición</div>
+      <div class="mode-btns">
+        <button class="mode-btn active" data-mode="front">▲ Frente</button>
+        <button class="mode-btn" data-mode="origin">▼ Origen</button>
+        <button class="mode-btn" data-mode="lane">| Calles</button>
+        <button class="mode-btn" data-mode="spot">● Manchas</button>
+      </div>
+      <p class="hint" id="modeHint">Haz clic en la imagen para marcar la línea del frente del solvente.</p>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">Detección automática</div>
+      <div class="range-row">
+        <label>Threshold</label>
+        <input type="range" id="threshold" min="5" max="100" value="35">
+        <span class="range-val" id="thresholdVal">35</span>
+      </div>
+      <div class="range-row">
+        <label>Min área</label>
+        <input type="range" id="minArea" min="50" max="3000" value="300" step="50">
+        <span class="range-val" id="minAreaVal">300</span>
+      </div>
+      <div class="range-row">
+        <label>Ancho calle</label>
+        <input type="range" id="laneHalf" min="5" max="150" value="40">
+        <span class="range-val" id="laneHalfVal">40</span>
+      </div>
+      <div class="row" style="margin-top:0.5rem">
+        <button class="btn primary" id="detectBtn">⚡ Auto-detectar</button>
+        <button class="btn" id="clearSpotsBtn">✕ Limpiar</button>
+      </div>
+    </div>
+
+    <div class="panel-section" style="flex:1">
+      <div class="panel-title">Calles</div>
+      <div class="lanes-list" id="lanesList">
+        <div class="empty-state">No hay calles.<br>Modo "Calles" → clic en imagen.</div>
+      </div>
+      <div class="row" style="margin-top:0.6rem">
+        <button class="btn" id="clearLanesBtn">✕ Borrar calles</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="row">
+        <button class="btn" id="zoomIn">+ Zoom</button>
+        <button class="btn" id="zoomOut">− Zoom</button>
+        <button class="btn" id="zoomFit">⊞ Fit</button>
+        <button class="btn" id="exportBtn">⬇ CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center-panel">
+    <div class="canvas-container" id="canvasContainer">
+      <canvas id="tlcCanvas"></canvas>
+      <div class="empty-state" id="dropHint" style="position:absolute;pointer-events:none">
+        <div style="font-size:3rem;margin-bottom:0.5rem">🔬</div>
+        Carga una imagen de TLC para comenzar
+      </div>
+    </div>
+    <div class="toolbar">
+      <span class="tlabel">Frente: <span class="tval" id="frontYlbl">—</span></span>
+      <span class="tlabel">Origen: <span style="color:var(--warn)" id="originYlbl">—</span></span>
+      <span class="tlabel">Calles: <span class="tval" id="laneCountLbl">0</span></span>
+      <span class="tlabel">Manchas: <span class="tval" id="spotCountLbl">0</span></span>
+      <span class="tlabel" style="margin-left:auto">Zoom: <span class="tval" id="scaleLbl">—</span></span>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right-panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="quantity">📊 Cantidades</div>
+      <div class="tab" data-tab="densito">📈 Densitograma</div>
+      <div class="tab" data-tab="table">🗃 Tabla</div>
+    </div>
+
+    <div class="tab-content active" id="tab-quantity">
+      <div class="quantity-section">
+        <div class="notice">
+          <b>Volumen óptico integrado</b> = suma de (255 − gris) por pixel dentro de cada mancha. Manchas más oscuras o más grandes = mayor cantidad relativa. Las barras se normalizan al máximo de cada grupo Rf.
+        </div>
+        <div id="quantByRf"></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-densito">
+      <div class="densito-section">
+        <div class="notice">
+          Perfil de densidad óptica promedio a lo largo de cada calle (de origen → frente). Los picos son las manchas. Las líneas verticales marcan los centros de manchas detectadas.
+        </div>
+        <div id="densito-charts"></div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-table">
+      <div class="rf-section">
+        <div class="metrics-row">
+          <div class="metric"><div class="metric-label">MANCHAS</div><div class="metric-val" id="mTotal">0</div></div>
+          <div class="metric"><div class="metric-label">CALLES</div><div class="metric-val" id="mLanes">0</div></div>
+          <div class="metric"><div class="metric-label">Rf MÁX</div><div class="metric-val" id="mRfMax">—</div></div>
+        </div>
+        <table class="rf-table">
+          <thead>
+            <tr>
+              <th>Calle</th><th>Rf</th><th>Área px²</th><th>Vol. óptico</th><th>Rel %</th>
+            </tr>
+          </thead>
+          <tbody id="spotsTableBody">
+            <tr><td colspan="5" class="empty-state">Sin datos</td></tr>
+          </tbody>
+        </table>
+        <div class="row" style="margin-top:0.75rem">
+          <button class="btn" id="exportBtn2">⬇ Exportar CSV</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LANE_COLORS = ['#7ee8a2','#5bc4e0','#f0a500','#e05b9c','#a07bf0','#f07b5b','#7bf0d8','#d4f07b','#f0d87b','#b0e07b'];
+
+let ST = {
+  image: null, imgW: 0, imgH: 0, scale: 1,
+  frontY: null, originY: null,
+  lanes: [], selectedLane: null,
+  mode: 'front', dragging: false, dragStart: null,
+  px: null, // cached full-res pixel data
+};
+
+const canvas = document.getElementById('tlcCanvas');
+const ctx = canvas.getContext('2d');
+
+// TABS
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  };
+});
+
+// UPLOAD
+const uz = document.getElementById('uploadZone');
+const fi = document.getElementById('fileInput');
+uz.onclick = () => fi.click();
+uz.ondragover = e => { e.preventDefault(); uz.classList.add('drag'); };
+uz.ondragleave = () => uz.classList.remove('drag');
+uz.ondrop = e => { e.preventDefault(); uz.classList.remove('drag'); loadFile(e.dataTransfer.files[0]); };
+fi.onchange = e => loadFile(e.target.files[0]);
+
+function loadFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const img = new Image();
+  img.onload = () => {
+    ST.image = img; ST.imgW = img.width; ST.imgH = img.height;
+    ST.frontY = null; ST.originY = null; ST.lanes = []; ST.selectedLane = null;
+    // cache pixels
+    const off = document.createElement('canvas'); off.width = ST.imgW; off.height = ST.imgH;
+    const oc = off.getContext('2d'); oc.drawImage(img, 0, 0);
+    ST.px = oc.getImageData(0, 0, ST.imgW, ST.imgH).data;
+    document.getElementById('dropHint').style.display = 'none';
+    fitImage(); render(); updateUI();
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+// PIXEL HELPERS
+function gray(x, y) {
+  x = Math.round(x); y = Math.round(y);
+  if (x < 0 || x >= ST.imgW || y < 0 || y >= ST.imgH || !ST.px) return 255;
+  const i = (y * ST.imgW + x) * 4;
+  return (ST.px[i] + ST.px[i+1] + ST.px[i+2]) / 3;
+}
+function od(x, y) { return 255 - gray(x, y); } // optical density: 0=white, 255=black
+
+function spotMetrics(spot) {
+  let area = 0, volume = 0;
+  const x0 = Math.round(spot.x), x1 = Math.round(spot.x + spot.w);
+  const y0 = Math.round(spot.y), y1 = Math.round(spot.y + spot.h);
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) { volume += od(x, y); area++; }
+  return { area, volume };
+}
+
+function laneProfile(lane) {
+  const hw = +document.getElementById('laneHalf').value;
+  const x0 = Math.max(0, Math.round(lane.x - hw));
+  const x1 = Math.min(ST.imgW - 1, Math.round(lane.x + hw));
+  const yTop = ST.frontY != null ? Math.max(0, Math.round(ST.frontY) - 5) : 0;
+  const yBot = ST.originY != null ? Math.min(ST.imgH - 1, Math.round(ST.originY) + 5) : ST.imgH - 1;
+  const pts = [];
+  for (let y = yTop; y <= yBot; y++) {
+    let s = 0; for (let x = x0; x <= x1; x++) s += od(x, y);
+    const width = x1 - x0 + 1;
+    const rf = (ST.frontY != null && ST.originY != null)
+      ? Math.max(0, Math.min(1, (ST.originY - y) / (ST.originY - ST.frontY))) : null;
+    pts.push({ y, od: s / width, rf });
+  }
+  return pts;
+}
+
+// FIT / RESIZE
+function fitImage() {
+  const c = document.getElementById('canvasContainer');
+  ST.scale = Math.min((c.clientWidth - 40) / ST.imgW, (c.clientHeight - 40) / ST.imgH, 2);
+  canvas.width = Math.round(ST.imgW * ST.scale);
+  canvas.height = Math.round(ST.imgH * ST.scale);
+}
+function resizeCanvas() {
+  canvas.width = Math.round(ST.imgW * ST.scale);
+  canvas.height = Math.round(ST.imgH * ST.scale);
+}
+
+// MODES
+document.querySelectorAll('.mode-btn').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); ST.mode = b.dataset.mode; hint();
+  };
+});
+function hint() {
+  const h = { front:'Clic → marca el frente del solvente (línea superior).', origin:'Clic → marca la línea de origen.', lane:'Clic → agrega una calle. Renómbrala en la lista.', spot:'Clic y arrastra → dibuja una mancha. O usa Auto-detectar.' };
+  document.getElementById('modeHint').textContent = h[ST.mode] || '';
+}
+
+// CANVAS EVENTS
+function c2i(cx, cy) { return { x: cx / ST.scale, y: cy / ST.scale }; }
+
+canvas.addEventListener('mousedown', e => {
+  if (!ST.image) return;
+  const r = canvas.getBoundingClientRect();
+  const p = c2i(e.clientX - r.left, e.clientY - r.top);
+  if (ST.mode === 'front') { ST.frontY = p.y; step(2); render(); updateUI(); }
+  else if (ST.mode === 'origin') { ST.originY = p.y; step(3); render(); updateUI(); }
+  else if (ST.mode === 'lane') { addLane(p.x); }
+  else if (ST.mode === 'spot') { ST.dragging = true; ST.dragStart = p; }
+});
+canvas.addEventListener('mousemove', e => {
+  if (!ST.dragging || ST.mode !== 'spot') return;
+  render();
+  const r = canvas.getBoundingClientRect();
+  const p = c2i(e.clientX - r.left, e.clientY - r.top);
+  const x = Math.min(ST.dragStart.x, p.x), y = Math.min(ST.dragStart.y, p.y);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
+  ctx.strokeRect(x * ST.scale, y * ST.scale, Math.abs(p.x - ST.dragStart.x) * ST.scale, Math.abs(p.y - ST.dragStart.y) * ST.scale);
+  ctx.setLineDash([]);
+});
+canvas.addEventListener('mouseup', e => {
+  if (!ST.dragging) return; ST.dragging = false;
+  if (ST.mode === 'spot') {
+    const r = canvas.getBoundingClientRect();
+    const p = c2i(e.clientX - r.left, e.clientY - r.top);
+    const x = Math.min(ST.dragStart.x, p.x), y = Math.min(ST.dragStart.y, p.y);
+    const w = Math.abs(p.x - ST.dragStart.x), h = Math.abs(p.y - ST.dragStart.y);
+    if (w > 5 && h > 5) {
+      const lane = nearestLane(x + w / 2);
+      if (lane) { lane.spots.push({x,y,w,h}); step(5); render(); updateUI(); }
+    }
+  }
+});
+
+function nearestLane(ix) {
+  return ST.lanes.length ? ST.lanes.reduce((a,b) => Math.abs(a.x-ix) < Math.abs(b.x-ix) ? a : b) : null;
+}
+
+// ZOOM
+document.getElementById('zoomIn').onclick = () => { ST.scale = Math.min(ST.scale * 1.25, 5); resizeCanvas(); render(); };
+document.getElementById('zoomOut').onclick = () => { ST.scale = Math.max(ST.scale / 1.25, 0.1); resizeCanvas(); render(); };
+document.getElementById('zoomFit').onclick = () => { fitImage(); render(); };
+
+// LANES
+function addLane(ix) {
+  ST.lanes.push({ x: ix, name: `Calle ${ST.lanes.length + 1}`, color: LANE_COLORS[ST.lanes.length % LANE_COLORS.length], spots: [] });
+  ST.lanes.sort((a,b) => a.x - b.x);
+  step(4); render(); updateUI(); renderLanes();
+}
+document.getElementById('clearLanesBtn').onclick = () => { ST.lanes = []; ST.selectedLane = null; render(); updateUI(); renderLanes(); };
+
+function renderLanes() {
+  const el = document.getElementById('lanesList');
+  if (!ST.lanes.length) { el.innerHTML = '<div class="empty-state">No hay calles.<br>Modo "Calles" → clic en imagen.</div>'; return; }
+  el.innerHTML = '';
+  ST.lanes.forEach((lane, i) => {
+    const d = document.createElement('div');
+    d.className = 'lane-item' + (ST.selectedLane === i ? ' selected' : '');
+    d.innerHTML = `<div class="lane-dot" style="background:${lane.color}"></div>
+      <input class="lane-name-input" value="${lane.name}" placeholder="Nombre…" data-i="${i}">
+      <button class="lane-action-btn" data-del="${i}">✕</button>`;
+    d.onclick = ev => { if (!ev.target.matches('input,button')) { ST.selectedLane = i; render(); renderLanes(); } };
+    el.appendChild(d);
+  });
+  el.querySelectorAll('.lane-name-input').forEach(inp => inp.oninput = e => { ST.lanes[+e.target.dataset.i].name = e.target.value; updateRight(); });
+  el.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.stopPropagation(); ST.lanes.splice(+b.dataset.del, 1); render(); updateUI(); renderLanes(); });
+  document.getElementById('laneCountLbl').textContent = ST.lanes.length;
+}
+
+// AUTO-DETECT
+document.getElementById('detectBtn').onclick = () => {
+  if (!ST.image || !ST.lanes.length) { alert('Carga una imagen y define al menos una calle.'); return; }
+  const thr = +document.getElementById('threshold').value;
+  const minA = +document.getElementById('minArea').value;
+  const hw = +document.getElementById('laneHalf').value;
+  const yTop = ST.frontY != null ? Math.max(0, Math.floor(ST.frontY) - 5) : 0;
+  const yBot = ST.originY != null ? Math.min(ST.imgH - 1, Math.floor(ST.originY) + 5) : ST.imgH - 1;
+  const W = ST.imgW;
+  ST.lanes.forEach(lane => {
+    lane.spots = [];
+    const x0 = Math.max(0, Math.floor(lane.x - hw));
+    const x1 = Math.min(W - 1, Math.floor(lane.x + hw));
+    const dark = idx => { const r=ST.px[idx*4],g=ST.px[idx*4+1],b=ST.px[idx*4+2]; return (r+g+b)/3 < 255-thr; };
+    const vis = new Uint8Array(W * ST.imgH);
+    for (let y = yTop; y <= yBot; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const idx = y * W + x;
+        if (!vis[idx] && dark(idx)) {
+          const q = [idx]; vis[idx] = 1;
+          let mnX=x,mxX=x,mnY=y,mxY=y,area=0;
+          while (q.length) {
+            const cur = q.pop();
+            const cy=Math.floor(cur/W), cx=cur%W;
+            if(cx<mnX)mnX=cx; if(cx>mxX)mxX=cx; if(cy<mnY)mnY=cy; if(cy>mxY)mxY=cy; area++;
+            for (const n of [cur-1,cur+1,cur-W,cur+W]) {
+              if (n>=0 && n<W*ST.imgH && !vis[n]) {
+                const ny=Math.floor(n/W), nx=n%W;
+                if (nx>=x0&&nx<=x1&&ny>=yTop&&ny<=yBot&&dark(n)) { vis[n]=1; q.push(n); }
+              }
+            }
+          }
+          if (area >= minA) lane.spots.push({x:mnX,y:mnY,w:mxX-mnX,h:mxY-mnY});
+        }
+      }
+    }
+  });
+  step(5); render(); updateUI();
+};
+document.getElementById('clearSpotsBtn').onclick = () => { ST.lanes.forEach(l => l.spots=[]); render(); updateUI(); };
+
+// RF
+function rf(spotMidY) {
+  if (ST.frontY===null||ST.originY===null) return null;
+  return Math.max(0, Math.min(1, (ST.originY - spotMidY) / (ST.originY - ST.frontY)));
+}
+
+// RENDER CANVAS
+function render() {
+  if (!ST.image) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(ST.image, 0, 0, canvas.width, canvas.height);
+  const s = ST.scale;
+  if (ST.frontY !== null) {
+    ctx.strokeStyle='#7ee8a2'; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(0,ST.frontY*s); ctx.lineTo(canvas.width,ST.frontY*s); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle='#7ee8a2'; ctx.font='10px IBM Plex Mono';
+    ctx.fillText('FRENTE', 4, ST.frontY*s-4);
+  }
+  if (ST.originY !== null) {
+    ctx.strokeStyle='#f0a500'; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(0,ST.originY*s); ctx.lineTo(canvas.width,ST.originY*s); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle='#f0a500'; ctx.font='10px IBM Plex Mono';
+    ctx.fillText('ORIGEN', 4, ST.originY*s+13);
+  }
+  ST.lanes.forEach(lane => {
+    ctx.strokeStyle=lane.color+'88'; ctx.lineWidth=1; ctx.setLineDash([3,5]);
+    ctx.beginPath(); ctx.moveTo(lane.x*s,0); ctx.lineTo(lane.x*s,canvas.height); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle=lane.color; ctx.font='9px IBM Plex Mono';
+    ctx.fillText(lane.name, lane.x*s+3, 13);
+    lane.spots.forEach(spot => {
+      const r = rf(spot.y + spot.h/2);
+      ctx.strokeStyle=lane.color; ctx.lineWidth=1.5;
+      ctx.strokeRect(spot.x*s, spot.y*s, spot.w*s, spot.h*s);
+      ctx.fillStyle=lane.color+'25';
+      ctx.fillRect(spot.x*s, spot.y*s, spot.w*s, spot.h*s);
+      if (r!==null) {
+        ctx.fillStyle=lane.color; ctx.font='8px IBM Plex Mono';
+        ctx.fillText(`Rf ${r.toFixed(2)}`, spot.x*s, spot.y*s-3);
+      }
+    });
+  });
+  updateRight();
+}
+
+function updateUI() {
+  document.getElementById('frontYlbl').textContent = ST.frontY!==null ? Math.round(ST.frontY)+'px' : '—';
+  document.getElementById('originYlbl').textContent = ST.originY!==null ? Math.round(ST.originY)+'px' : '—';
+  document.getElementById('laneCountLbl').textContent = ST.lanes.length;
+  document.getElementById('spotCountLbl').textContent = ST.lanes.reduce((s,l)=>s+l.spots.length,0);
+  document.getElementById('scaleLbl').textContent = (ST.scale*100).toFixed(0)+'%';
+  renderLanes(); updateRight();
+}
+
+// RIGHT PANEL
+function updateRight() { renderQuantity(); renderDensitograms(); renderTable(); }
+
+function fmtVol(v) {
+  if (v>=1e6) return (v/1e6).toFixed(1)+'M';
+  if (v>=1e3) return (v/1e3).toFixed(1)+'k';
+  return v.toFixed(0);
+}
+
+// QUANTITY TAB
+function renderQuantity() {
+  const el = document.getElementById('quantByRf');
+  if (!ST.px) { el.innerHTML = '<div class="empty-state">Carga una imagen.</div>'; return; }
+
+  // Gather all spots with metrics
+  const all = [];
+  ST.lanes.forEach(lane => {
+    lane.spots.forEach(spot => {
+      const m = spotMetrics(spot);
+      const r = rf(spot.y + spot.h/2);
+      all.push({ lane, spot, rf: r, ...m });
+    });
+  });
+
+  if (!all.length) { el.innerHTML = '<div class="empty-state">Detecta manchas para ver<br>la comparación de cantidades.</div>'; return; }
+
+  // 1) Total per lane
+  const laneMap = {};
+  ST.lanes.forEach(l => { laneMap[l.name] = { color: l.color, total: 0 }; });
+  all.forEach(s => { laneMap[s.lane.name].total += s.volume; });
+  const maxLane = Math.max(...Object.values(laneMap).map(v=>v.total), 1);
+
+  let html = `<div class="quant-chart"><div class="quant-title">▶ Carga total por calle (todas las manchas)</div>`;
+  Object.entries(laneMap).forEach(([name, v]) => {
+    const pct = (v.total / maxLane * 100).toFixed(0);
+    html += `<div class="bar-group">
+      <div class="bar-label"><span style="color:${v.color}">${name}</span><span>${pct}%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${v.color}">
+        <span class="bar-fill-label">${fmtVol(v.total)}</span>
+      </div></div></div>`;
+  });
+  html += '</div>';
+
+  // 2) Group by Rf (tolerance ±0.06)
+  const groups = [];
+  all.forEach(s => {
+    if (s.rf === null) return;
+    let g = groups.find(g => Math.abs(g.rf - s.rf) < 0.07);
+    if (!g) { g = { rf: s.rf, spots: [] }; groups.push(g); }
+    g.spots.push(s);
+  });
+  groups.sort((a,b) => b.rf - a.rf);
+
+  groups.forEach(g => {
+    const maxG = Math.max(...g.spots.map(s=>s.volume), 1);
+    html += `<div class="quant-chart"><div class="quant-title">▶ Rf ≈ ${g.rf.toFixed(3)} · comparación entre calles</div>`;
+    ST.lanes.forEach(lane => {
+      const s = g.spots.find(sp => sp.lane === lane);
+      const vol = s ? s.volume : 0;
+      const pct = Math.round(vol / maxG * 100);
+      const areaStr = s ? s.area.toLocaleString() + ' px²' : '—';
+      html += `<div class="bar-group">
+        <div class="bar-label">
+          <span style="color:${lane.color}">${lane.name}</span>
+          <span style="color:var(--muted);font-size:0.6rem">${areaStr}</span>
+          <span>${pct}%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${lane.color}">
+          ${vol>0?`<span class="bar-fill-label">${fmtVol(vol)}</span>`:''}
+        </div></div></div>`;
+    });
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+  step(6);
+}
+
+// DENSITOGRAM TAB
+function renderDensitograms() {
+  const el = document.getElementById('densito-charts');
+  if (!ST.lanes.length || !ST.px) { el.innerHTML = '<div class="empty-state">Define calles para ver densitogramas.</div>'; return; }
+  el.innerHTML = '';
+  ST.lanes.forEach(lane => {
+    const prof = laneProfile(lane);
+    if (!prof.length) return;
+    const wrap = document.createElement('div'); wrap.style.marginBottom = '1.2rem';
+    const ttl = document.createElement('div');
+    ttl.style.cssText = `font-family:'IBM Plex Mono',monospace;font-size:0.65rem;color:${lane.color};margin-bottom:5px;font-weight:600`;
+    ttl.textContent = `${lane.name}  (${lane.spots.length} manchas)`;
+    wrap.appendChild(ttl);
+
+    const c = document.createElement('canvas'); c.width=300; c.height=90; c.className='densito';
+    wrap.appendChild(c); el.appendChild(wrap);
+
+    const dc = c.getContext('2d');
+    const W=c.width, H=c.height;
+    dc.fillStyle='#1e2128'; dc.fillRect(0,0,W,H);
+
+    // Grid lines
+    dc.strokeStyle='#2a2d35'; dc.lineWidth=1;
+    [0.25,0.5,0.75].forEach(f => { dc.beginPath(); dc.moveTo(W*f,0); dc.lineTo(W*f,H); dc.stroke(); });
+    [0.25,0.5,0.75].forEach(f => { dc.beginPath(); dc.moveTo(0,H*f); dc.lineTo(W,H*f); dc.stroke(); });
+
+    const maxOD = Math.max(...prof.map(p=>p.od), 1);
+
+    // Fill
+    dc.beginPath();
+    prof.forEach((p,i) => {
+      const x=i/(prof.length-1)*W, y=H-(p.od/maxOD)*(H-6)-3;
+      i===0?dc.moveTo(x,y):dc.lineTo(x,y);
+    });
+    dc.lineTo(W,H); dc.lineTo(0,H); dc.closePath();
+    dc.fillStyle=lane.color+'1a'; dc.fill();
+
+    // Line
+    dc.strokeStyle=lane.color; dc.lineWidth=1.5; dc.beginPath();
+    prof.forEach((p,i) => { const x=i/(prof.length-1)*W, y=H-(p.od/maxOD)*(H-6)-3; i===0?dc.moveTo(x,y):dc.lineTo(x,y); });
+    dc.stroke();
+
+    // Spot lines
+    const yTop = ST.frontY!=null ? Math.max(0,Math.round(ST.frontY)-5) : 0;
+    const yBot = ST.originY!=null ? Math.min(ST.imgH-1,Math.round(ST.originY)+5) : ST.imgH-1;
+    lane.spots.forEach(spot => {
+      const midY = spot.y + spot.h/2;
+      const t = (midY - yTop) / Math.max(1, yBot - yTop);
+      const x = t * W;
+      dc.strokeStyle=lane.color+'cc'; dc.lineWidth=1; dc.setLineDash([2,2]);
+      dc.beginPath(); dc.moveTo(x,0); dc.lineTo(x,H); dc.stroke(); dc.setLineDash([]);
+      const r = rf(midY);
+      if (r!==null) {
+        dc.fillStyle=lane.color; dc.font='7px IBM Plex Mono';
+        dc.fillText(`Rf ${r.toFixed(2)}`, x+2, 10);
+      }
+    });
+
+    // Axis labels
+    dc.fillStyle='#6b7280'; dc.font='7px IBM Plex Mono';
+    dc.fillText('origen', 2, H-2);
+    dc.fillText('frente', W-34, H-2);
+    dc.fillStyle='#9ca3af';
+    dc.fillText(`max OD: ${maxOD.toFixed(0)}`, 2, H-12);
+  });
+}
+
+// TABLE TAB
+function renderTable() {
+  const rows = [];
+  ST.lanes.forEach(lane => {
+    lane.spots.forEach(spot => {
+      const r = rf(spot.y + spot.h/2);
+      const m = ST.px ? spotMetrics(spot) : {area:0,volume:0};
+      rows.push({lane, rf:r, ...m});
+    });
+  });
+  const maxVol = Math.max(...rows.map(r=>r.volume), 1);
+  document.getElementById('mTotal').textContent = rows.length;
+  document.getElementById('mLanes').textContent = ST.lanes.length;
+  const rfs = rows.filter(r=>r.rf!==null).map(r=>r.rf);
+  document.getElementById('mRfMax').textContent = rfs.length ? Math.max(...rfs).toFixed(3) : '—';
+
+  const tbody = document.getElementById('spotsTableBody');
+  if (!rows.length) { tbody.innerHTML='<tr><td colspan="5" class="empty-state">Sin datos</td></tr>'; return; }
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td><span style="color:${r.lane.color}">${r.lane.name}</span></td>
+    <td><span class="rf-badge">${r.rf!==null?r.rf.toFixed(3):'—'}</span></td>
+    <td>${r.area.toLocaleString()}</td>
+    <td>${fmtVol(r.volume)}</td>
+    <td><span class="quant-badge">${(r.volume/maxVol*100).toFixed(1)}%</span></td>
+  </tr>`).join('');
+}
+
+// STEPS
+function step(n) { for(let i=1;i<=n;i++) { const e=document.getElementById(`step${i}`); if(e) e.classList.add('active'); } }
+
+// EXPORT
+function doExport() {
+  const rows=[['Calle','Rf','Area_px2','Vol_optico','Rel_pct']];
+  const all=[];
+  ST.lanes.forEach(lane => lane.spots.forEach(spot => {
+    const r=rf(spot.y+spot.h/2);
+    const m=ST.px?spotMetrics(spot):{area:0,volume:0};
+    all.push({lane,rf:r,...m});
+  }));
+  const maxVol=Math.max(...all.map(r=>r.volume),1);
+  all.forEach(r => rows.push([r.lane.name, r.rf!==null?r.rf.toFixed(4):'', r.area, r.volume.toFixed(0), (r.volume/maxVol*100).toFixed(2)]));
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'}));
+  a.download='tlc_datos.csv'; a.click();
+}
+document.getElementById('exportBtn').onclick = doExport;
+document.getElementById('exportBtn2').onclick = doExport;
+
+// RANGE LABELS
+['threshold','minArea','laneHalf'].forEach(id => {
+  const inp=document.getElementById(id), lbl=document.getElementById(id+'Val');
+  inp.oninput=()=>lbl.textContent=inp.value;
+});
+
+hint();
+</script>
+</body>
+</html>
